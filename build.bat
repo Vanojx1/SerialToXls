@@ -1,0 +1,1 @@
+pyinstaller -w -F -n SerialToXls app.py
