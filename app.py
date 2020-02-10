@@ -94,7 +94,7 @@ class MainApplication(tk.Frame):
     def handle_data(self, new_data):
         if new_data != '':
             self.buffer += new_data.strip()
-            full_match = re.match(r'@00EX((?:[0-9]{4})+)5B', self.buffer)
+            full_match = re.match(r'@00EX((?:[0-9]{4})+)5B\*', self.buffer)
             # print(self.buffer, full_match)
             if full_match:
                 self.buffer = ''
