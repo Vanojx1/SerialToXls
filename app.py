@@ -27,9 +27,12 @@ class MainApplication(tk.Frame):
         # port
         self.port_var = tk.StringVar(self.parent)
         self.ports = {p.device: p for p in comports()}
-        self.port_var.set(list(self.ports.keys()).pop(0))
+        if len(self.ports.keys()) > 0:
+            self.port_var.set(list(self.ports.keys()).pop(0))
+            port_menu = tk.OptionMenu(self, self.port_var, *self.ports.keys())
+        else:
+            port_menu = tk.OptionMenu(self, self.port_var, None)
         port_label = tk.Label(self, text="Port")
-        port_menu = tk.OptionMenu(self, self.port_var, *self.ports.keys())
 
         # baudrate
         self.baud_var = tk.IntVar(self.parent)
@@ -63,9 +66,8 @@ class MainApplication(tk.Frame):
         self.log_area = ScrolledText(self.parent, width=40, height=10)
 
         self.button = tk.Button(
-            self, text="Start", fg="red", height=5, width=10, command=self.toggle)
-        
-        
+            self, text="Start", fg="red", height=5, width=10, command=self.toggle, state='disabled' if len(self.ports.keys()) == 0 else 'normal')
+
         port_label.grid(row=0, column=0)
         port_menu.grid(row=0, column=1, sticky=E+W)
         baud_label.grid(row=1, column=0)
@@ -82,23 +84,33 @@ class MainApplication(tk.Frame):
         self.running = False
         self.current_port = None
         self.thread = None
+        self.buffer = ''
 
     def log(self, text):
         self.log_area.config(state='normal')
         self.log_area.insert(tk.INSERT, text + '\n')
         self.log_area.config(state='disabled')
 
-    def handle_data(self, data):
-        if data != '':
-            self.log('Ricevuto: %s' % data)
-            A = ord('A')
-            for i, match in enumerate(re.findall(r'[0-9]{4}', data)):
-                self.worksheet.write(
-                    'A%s' % self.row_count, datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
-                self.worksheet.write_number(
-                    '%s%s' % (chr(A+i+1), self.row_count), int(match))
-            self.row_count += 1
-            # print('RECEIVED', data)
+    def handle_data(self, new_data):
+        if new_data != '':
+            self.buffer += new_data.strip()
+            full_match = re.match(r'@00EX((?:[0-9]{4})+)5B', self.buffer)
+            # print(self.buffer, full_match)
+            if full_match:
+                self.buffer = ''
+                data = full_match.group(1)
+                self.log('Ricevuto: %s' % data)
+                A = ord('A')
+                for i, match in enumerate(re.findall(r'[0-9]{4}', data)):
+                    now = datetime.now()
+                    self.worksheet.write(
+                        'A%s' % self.row_count, now.strftime("%m/%d/%Y"))
+                    self.worksheet.write(
+                        'B%s' % self.row_count, now.strftime("%H:%M:%S"))
+                    self.worksheet.write_number(
+                        '%s%s' % (chr(A+i+2), self.row_count), int(match))
+                self.row_count += 1
+                # print('RECEIVED', data)
 
     def read_from_port(self, port, baudrate, byte, parity, stopbit):
         # print(port, baudrate, byte, parity, stopbit)
@@ -111,10 +123,11 @@ class MainApplication(tk.Frame):
             timeout=0
         )
         t = currentThread()
-        self.log('Porta: %s|%s|%s|%s|%s connessa' % (port, baudrate, byte, parity, stopbit))
+        self.log('Porta: %s|%s|%s|%s|%s connessa' %
+                 (port, baudrate, byte, parity, stopbit))
         while getattr(t, "do_run", True):
             try:
-                reading = s.readline().decode()
+                reading = s.read().decode()
                 self.handle_data(reading)
             except SerialException as e:
                 self.toggle()
