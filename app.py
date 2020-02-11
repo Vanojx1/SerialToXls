@@ -12,7 +12,11 @@ import xlsxwriter
 from datetime import datetime
 import re
 from tkinter.scrolledtext import ScrolledText
+from tkinter.filedialog import askdirectory
 from tkinter import N, S, W, E
+import os
+
+desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
 
 
 class MainApplication(tk.Frame):
@@ -23,6 +27,16 @@ class MainApplication(tk.Frame):
         self.parent.resizable(False, False)
 
         self.pack(pady=20, padx=40)
+
+        # machine
+        machine_label = tk.Label(self, text='Macchina')
+        self.machine_field = tk.Entry(self)
+
+        # folder
+        folder_label = tk.Label(self, text='Esporta in')
+        self.folder_field = tk.Entry(self)
+        self.folder_field.insert(0, desktop)
+        self.folder_field.bind("<Button-1>", self.open_folder)
 
         # port
         self.port_var = tk.StringVar(self.parent)
@@ -35,11 +49,9 @@ class MainApplication(tk.Frame):
         port_label = tk.Label(self, text="Port")
 
         # baudrate
-        self.baud_var = tk.IntVar(self.parent)
-        self.baud_var.set(9600)
         baud_label = tk.Label(self, text='Baudrate')
-        baud_field = tk.Entry(self)
-        baud_field.insert(0, 9600)
+        self.baud_field = tk.Entry(self)
+        self.baud_field.insert(0, 9600)
 
         # bytesize
         self.byte_var = tk.IntVar(self.parent)
@@ -68,23 +80,33 @@ class MainApplication(tk.Frame):
         self.button = tk.Button(
             self, text="Start", fg="red", height=5, width=10, command=self.toggle, state='disabled' if len(self.ports.keys()) == 0 else 'normal')
 
-        port_label.grid(row=0, column=0)
-        port_menu.grid(row=0, column=1, sticky=E+W)
-        baud_label.grid(row=1, column=0)
-        baud_field.grid(row=1, column=1, sticky=E+W)
-        byte_label.grid(row=2, column=0)
-        byte_menu.grid(row=2, column=1, sticky=E+W)
-        parity_label.grid(row=3, column=0)
-        parity_menu.grid(row=3, column=1, sticky=E+W)
-        stopbit_label.grid(row=4, column=0)
-        stopbit_menu.grid(row=4, column=1, sticky=E+W)
-        self.button.grid(row=0, column=2, rowspan=5, sticky=N+S+E)
+        machine_label.grid(row=0, column=0)
+        self.machine_field.grid(row=0, column=1)
+        folder_label.grid(row=1, column=0)
+        self.folder_field.grid(row=1, column=1)
+        port_label.grid(row=2, column=0)
+        port_menu.grid(row=2, column=1, sticky=E+W)
+        baud_label.grid(row=3, column=0)
+        self.baud_field.grid(row=3, column=1, sticky=E+W)
+        byte_label.grid(row=4, column=0)
+        byte_menu.grid(row=4, column=1, sticky=E+W)
+        parity_label.grid(row=5, column=0)
+        parity_menu.grid(row=5, column=1, sticky=E+W)
+        stopbit_label.grid(row=6, column=0)
+        stopbit_menu.grid(row=6, column=1, sticky=E+W)
+        self.button.grid(row=0, column=2, rowspan=6, sticky=N+S+E)
         self.log_area.pack()
 
         self.running = False
         self.current_port = None
         self.thread = None
         self.buffer = ''
+
+    def open_folder(self, e):
+        folder = askdirectory()
+        if folder:
+            self.folder_field.delete(0, tk.END)
+            self.folder_field.insert(0, folder)
 
     def log(self, text):
         self.log_area.config(state='normal')
@@ -140,14 +162,15 @@ class MainApplication(tk.Frame):
         self.button.configure(text='Stop' if self.running else 'Start')
 
         if self.running:
-            xls_title = 'Letture_%s.xlsx' % datetime.now().strftime("%m%d%Y%H%M%S")
-            self.workbook = xlsxwriter.Workbook(xls_title)
+            xls_title = 'Letture_%s_%s.xlsx' % (self.machine_field.get(), datetime.now().strftime("%m%d%Y%H%M%S"))
+            xls_path = os.path.join(self.folder_field.get(), xls_title)
+            self.workbook = xlsxwriter.Workbook(xls_path)
             self.worksheet = self.workbook.add_worksheet()
             self.log('Xls: %s' % xls_title)
             self.row_count = 1
             self.current_port = self.ports[self.port_var.get()]
             self.thread = Thread(target=self.read_from_port,
-                                 args=(self.current_port.device, self.baud_var.get(), self.byte_var.get(), self.parity_var.get(), self.stopbit_var.get()))
+                                 args=(self.current_port.device, int(self.baud_field.get()), self.byte_var.get(), self.parity_var.get(), self.stopbit_var.get()))
             self.thread.start()
         else:
             self.thread.do_run = False
